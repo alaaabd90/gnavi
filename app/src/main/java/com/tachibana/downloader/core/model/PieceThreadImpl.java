@@ -84,6 +84,21 @@ class PieceThreadImpl extends Thread implements PieceThread
     /* The minimum amount of time that has to elapse before the progress bar gets updated, ms */
     private static final long MIN_PROGRESS_TIME = 2000;
     private static final long MILLIS_IN_SEC = 1000;
+    /*
+     * gnavi: base/cap for a backoff delay before retrying a piece after a
+     * retryable failure (see call()'s do/while loop). Previously retried
+     * with zero delay -- confirmed live: this tunnel relays through a
+     * shared Drive-upload pipeline whose real bottleneck is Google
+     * throttling the aggregate load across accounts, not any single
+     * connection being unreachable. A dead connection retried instantly
+     * just adds another reconnect attempt on top of the same still-busy
+     * backend, and with 10 pieces all doing that at once, the immediate,
+     * unlimited retries were themselves adding to the contention they
+     * were reacting to. A short, growing backoff gives the backend a
+     * moment to drain before each retry instead of piling on immediately.
+     */
+    private static final long RETRY_BASE_DELAY_MS = 500;
+    private static final long RETRY_MAX_DELAY_MS = 8000;
 
     private DownloadPiece piece;
     private final UUID infoId;
@@ -141,7 +156,20 @@ class PieceThreadImpl extends Thread implements PieceThread
                 return result;
             }
 
+            int retryCount = 0;
             do {
+                if (retryCount > 0) {
+                    long delayMs = Math.min(
+                            RETRY_BASE_DELAY_MS << Math.min(retryCount - 1, 4),
+                            RETRY_MAX_DELAY_MS);
+                    try {
+                        Thread.sleep(delayMs);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+
                 piece.statusCode = STATUS_RUNNING;
                 piece.statusMsg = null;
                 writeToDatabase();
@@ -150,6 +178,9 @@ class PieceThreadImpl extends Thread implements PieceThread
                     handleRequest(ret);
                 else
                     piece.statusCode = STATUS_SUCCESS;
+
+                if (piece.statusCode == STATUS_WAITING_TO_RETRY)
+                    retryCount++;
 
             } while (piece != null && piece.statusCode == STATUS_WAITING_TO_RETRY);
 
