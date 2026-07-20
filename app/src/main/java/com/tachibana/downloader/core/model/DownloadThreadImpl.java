@@ -472,6 +472,8 @@ class DownloadThreadImpl implements DownloadThread
             }
             connection.setReferer(connectWithReferer[0] ? info.url : null);
             connection.setTimeout(pref.timeout());
+            /* gnavi: see HttpConnection.DEFAULT_READ_TIMEOUT's doc comment. */
+            connection.setReadTimeout(Math.max(pref.timeout(), HttpConnection.DEFAULT_READ_TIMEOUT));
             connection.contentRangeLength(true);
             connection.setListener(new HttpConnection.Listener() {
                 @Override

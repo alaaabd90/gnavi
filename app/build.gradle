@@ -4,7 +4,7 @@ android {
     namespace 'com.tachibana.downloader'
     compileSdkVersion 33
     defaultConfig {
-        applicationId 'com.tachibana.downloader'
+        applicationId 'com.gnavi.downloader'
         minSdkVersion 19
         targetSdkVersion 33
         versionCode 15

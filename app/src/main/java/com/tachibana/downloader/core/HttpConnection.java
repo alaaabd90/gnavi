@@ -45,6 +45,34 @@ public class HttpConnection implements Runnable
     /* Can't be more than 7 */
     private static final int MAX_REDIRECTS = 5;
     public static final int DEFAULT_TIMEOUT = (int)(20 * SECOND_IN_MILLIS);
+    /*
+     * gnavi: read timeout, separate from the connect timeout above.
+     *
+     * Upstream shared a single timeout value for both connect and read
+     * (java.net.HttpURLConnection#setConnectTimeout/#setReadTimeout), which
+     * is fine for a direct connection but wrong for a tunneled one: this
+     * fork exists specifically to download over the Gdrive VPN, which
+     * relays traffic through Google Drive API objects (poll/discover/batch
+     * cycles) rather than a raw socket, so data for any given piece
+     * legitimately arrives in bursts with real multi-second gaps between
+     * them, even when the transfer is completely healthy. With a 20s read
+     * timeout, PieceThreadImpl/DownloadThreadImpl's read() call throws
+     * SocketTimeoutException the moment a normal gap runs long, which
+     * HttpConnection.Listener#onIOException converts straight into a
+     * retryable "Download timeout" -- tearing down and reopening the
+     * connection for that piece. That is the exact TCP TIME_WAIT churn
+     * (a fresh connection roughly every 5-10s) measured live on the phone
+     * while a plain browser download over the same tunnel worked fine,
+     * since browsers don't abort a request on a fixed per-read idle
+     * timeout the way a segmented download manager does.
+     *
+     * 100s comfortably clears every real gap observed live against the
+     * Gdrive exit (including its own worst-case ~120s single-attempt
+     * ceiling for a large contended batch, muxDriveAttemptTimeout in
+     * internal/gdrive/mux.go), while still being finite so a genuinely
+     * dead connection is eventually noticed and retried.
+     */
+    public static final int DEFAULT_READ_TIMEOUT = (int)(100 * SECOND_IN_MILLIS);
     public static final int HTTP_TEMPORARY_REDIRECT = 307;
     public static final int HTTP_PERMANENT_REDIRECT = 308;
 
@@ -52,6 +80,7 @@ public class HttpConnection implements Runnable
     private final TLSSocketFactory socketFactory;
     private Listener listener;
     private int timeout = DEFAULT_TIMEOUT;
+    private int readTimeout = DEFAULT_READ_TIMEOUT;
     private String referer;
     private boolean contentRangeLength = false;
 
@@ -101,6 +130,19 @@ public class HttpConnection implements Runnable
         this.timeout = timeout;
     }
 
+    /*
+     * The non-negative number of milliseconds to wait for the next byte of
+     * data on an already-open connection before it's considered timed out.
+     * Zero is interpreted as an infinite timeout. Defaults to
+     * DEFAULT_READ_TIMEOUT, not setTimeout's (connect) value -- see
+     * DEFAULT_READ_TIMEOUT's doc comment.
+     */
+
+    public void setReadTimeout(int readTimeout)
+    {
+        this.readTimeout = readTimeout;
+    }
+
     @Override
     public void run()
     {
@@ -112,7 +154,7 @@ public class HttpConnection implements Runnable
                 conn = (HttpURLConnection)url.openConnection();
                 conn.setInstanceFollowRedirects(false);
                 conn.setConnectTimeout(timeout);
-                conn.setReadTimeout(timeout);
+                conn.setReadTimeout(readTimeout);
                 conn.setRequestProperty("Accept-Encoding", "identity");
 
                 // Get the cookies for the current domain.

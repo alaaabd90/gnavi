@@ -223,6 +223,8 @@ class PieceThreadImpl extends Thread implements PieceThread
             return new StopRequest(STATUS_UNKNOWN_ERROR, "Unable to create SSLContext");
         }
         connection.setTimeout(pref.timeout());
+        /* gnavi: see HttpConnection.DEFAULT_READ_TIMEOUT's doc comment. */
+        connection.setReadTimeout(Math.max(pref.timeout(), HttpConnection.DEFAULT_READ_TIMEOUT));
 
         if (!Utils.checkConnectivity(pref, systemFacade))
             return new StopRequest(STATUS_WAITING_FOR_NETWORK);
