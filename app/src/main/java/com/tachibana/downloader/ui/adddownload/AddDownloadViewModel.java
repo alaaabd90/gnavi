@@ -171,7 +171,7 @@ public class AddDownloadViewModel extends AndroidViewModel
         );
         params.setNumPieces(
                 initParams.numPieces == null ?
-                        DownloadInfo.MIN_PIECES :
+                        DownloadInfo.DEFAULT_GDRIVE_PIECES :
                         initParams.numPieces
         );
         params.setUncompressArchive(
@@ -506,7 +506,7 @@ public class AddDownloadViewModel extends AndroidViewModel
         info.unmeteredConnectionsOnly = params.isUnmeteredConnectionsOnly();
         info.partialSupport = params.isPartialSupport();
         info.setNumPieces((params.isPartialSupport() && params.getTotalBytes() > 0 ?
-                params.getNumPieces() :
+                effectiveNumPieces(params.getNumPieces(), params.getTotalBytes()) :
                 DownloadInfo.MIN_PIECES));
         info.retry = params.isRetry();
         info.userAgent = params.getUserAgent();
@@ -522,6 +522,24 @@ public class AddDownloadViewModel extends AndroidViewModel
             info.hasMetadata = state.status == Status.FETCHED;
 
         return info;
+    }
+
+    /*
+     * gnavi: caps requestedPieces so no piece ends up smaller than
+     * MIN_PIECE_SIZE -- DownloadInfo.setNumPieces only rejects numPieces
+     * exceeding totalBytes itself (1 byte/piece minimum), which would
+     * otherwise let a small file get split into many near-empty pieces,
+     * each paying a full HTTP request's overhead for a handful of bytes.
+     * Always returns at least 1.
+     */
+    private static final long MIN_PIECE_SIZE = 1024 * 1024; // 1 MiB
+
+    private int effectiveNumPieces(int requestedPieces, long totalBytes)
+    {
+        long maxByFileSize = totalBytes / MIN_PIECE_SIZE;
+        if (maxByFileSize < 1)
+            maxByFileSize = 1;
+        return (int) Math.min(requestedPieces, maxByFileSize);
     }
 
     private boolean checkFreeSpace()

@@ -51,6 +51,26 @@ public class DownloadInfo implements Parcelable, Comparable<DownloadInfo>
     /* Recommended max number of pieces */
     public static final int MAX_PIECES = 256;
     /*
+     * gnavi: default piece count for a new download when the caller
+     * doesn't specify one (AddDownloadViewModel). Upstream defaults to
+     * MIN_PIECES (1) here -- fine for a direct connection, but this fork
+     * exists to download over the Gdrive VPN's fleet of accounts behind a
+     * leastload load balancer: with only 1 connection, the LB only ever
+     * has one thing to place, so it can only ever pick one account at a
+     * time, no matter how many are configured. Confirmed live: a real
+     * download with numPieces left at the default touched only 3 of 12
+     * accounts, at a combined ~4KB/s. 12 gives the LB enough concurrent
+     * connections to spread across every account in a real 12-account
+     * fleet (2 reserved for browsing, 10 for bulk -- see
+     * MultiAccountManager.RESERVED_BROWSING_ACCOUNTS in the Gdrive
+     * client), without going as high as a conventional download
+     * manager's usual 16-32 default, which isn't needed now that the
+     * tunnel's read-timeout mismatch (HttpConnection.DEFAULT_READ_TIMEOUT)
+     * is fixed. The per-download slider in AddDownloadDialog still lets a
+     * user override this for any specific download.
+     */
+    public static final int DEFAULT_GDRIVE_PIECES = 12;
+    /*
      * This download is visible but only shows in the notifications
      * while it's in progress
      */
