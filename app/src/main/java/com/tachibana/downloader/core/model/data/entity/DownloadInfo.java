@@ -54,30 +54,36 @@ public class DownloadInfo implements Parcelable, Comparable<DownloadInfo>
      * gnavi: default piece count for a new download when the caller
      * doesn't specify one (AddDownloadViewModel). Upstream defaults to
      * MIN_PIECES (1) here -- fine for a direct connection, but this fork
-     * exists to download over the Gdrive VPN's fleet of accounts behind a
-     * leastload load balancer: with only 1 connection, the LB only ever
+     * exists to download over the Gdrive VPN's accounts behind a
+     * leastconn load balancer: with only 1 connection, the LB only ever
      * has one thing to place, so it can only ever pick one account at a
      * time, no matter how many are configured. Confirmed live: a real
      * download with numPieces left at the default touched only 3 of 12
      * accounts, at a combined ~4KB/s.
      *
-     * Set to 10, not the full 12-account fleet size: 2 of those 12
-     * accounts are permanently reserved for browsing (see
-     * MultiAccountManager.RESERVED_BROWSING_ACCOUNTS in the Gdrive
-     * client) and never receive bulk/download traffic at all, so pieces
-     * only ever get routed to the remaining 10 -- more than 10 pieces
-     * wouldn't reach any additional account, it would just make 10 of the
-     * bulk accounts carry 2 concurrent pieces apiece unevenly. 10 gives
-     * the LB exactly one piece to place per real bulk account. Not pushed
-     * higher (a conventional download manager's usual 16-32) since that
-     * isn't needed now that the tunnel's read-timeout mismatch
-     * (HttpConnection.DEFAULT_READ_TIMEOUT) is fixed, and it was already
-     * tried once (as 1DM) with genuine problems -- though those turned
-     * out to be the timeout bug, not the piece count itself. The
-     * per-download slider in AddDownloadDialog still lets a user override
-     * this for any specific download.
+     * Set to 12, matching the client's real account count exactly --
+     * gives the LB precisely one piece to place per account. This was
+     * previously 10, on the theory that 2 of 12 accounts were permanently
+     * reserved for browsing and never carried bulk traffic; that
+     * reservation belonged to an earlier "fleet" architecture line that
+     * was abandoned and rolled back (the constant it referenced,
+     * MultiAccountManager.RESERVED_BROWSING_ACCOUNTS, only exists in old
+     * build artifacts under the app.gdrive.client package, not in the
+     * current app.skirk.client source). The client running today routes
+     * both browsing and bulk traffic across the same full account pool,
+     * so a 10-piece cap was leaving 2 real accounts sitting idle for
+     * every gnavi download. Not pushed past the real account count (a
+     * conventional download manager's usual 16-32) since more pieces
+     * than accounts doesn't reach any additional account, it just makes
+     * some accounts carry multiple concurrent pieces unevenly -- and
+     * going well beyond the account count once already caused genuine
+     * problems (as 1DM), though those turned out to be this fork's fixed
+     * timeout bug (HttpConnection.DEFAULT_READ_TIMEOUT) and not the piece
+     * count itself. If the account count changes, update this to match.
+     * The per-download slider in AddDownloadDialog still lets a user
+     * override this for any specific download.
      */
-    public static final int DEFAULT_GDRIVE_PIECES = 10;
+    public static final int DEFAULT_GDRIVE_PIECES = 12;
     /*
      * This download is visible but only shows in the notifications
      * while it's in progress

@@ -152,14 +152,14 @@ public class AddDownloadActivity extends AppCompatActivity
         }
         if (params.numPieces == null) {
             /*
-             * gnavi: fall back to DEFAULT_GDRIVE_PIECES (10), not
+             * gnavi: fall back to DEFAULT_GDRIVE_PIECES (12), not
              * MIN_PIECES (1) -- this is the actual entry point for adding
              * a download from a URL/share intent (confirmed live: this
              * ran ahead of AddDownloadViewModel.init's own default,
              * silently setting numPieces back to 1 via this remembered
              * "last used" preference before init() ever saw a null value
              * to apply its own default to). See DEFAULT_GDRIVE_PIECES's
-             * doc comment for why 10.
+             * doc comment for why 12.
              */
             params.numPieces = localPref.getInt(
                     getString(R.string.add_download_num_pieces),
